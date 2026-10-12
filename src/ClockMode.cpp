@@ -3,11 +3,18 @@
 #include "Clock.h"
 #include "Gfx.h"
 #include "config.h"
+#include "Dashboard.h"
+#include "DashboardWeather.h"
 #include <Arduino_GFX_Library.h>
 
 ClockMode g_clockMode;
 
-void ClockMode::service(const Settings&) {
+void ClockMode::invalidate(const Settings& s) {
+  lastMinute_ = -1;
+  dashboardInvalidate(s);
+}
+
+void ClockMode::service(const Settings& s) {
   Arduino_GFX* d = gfxDev();
   if (!d) return;
   struct tm now;
@@ -20,10 +27,13 @@ void ClockMode::service(const Settings&) {
     }
     return;
   }
+  bool refreshed = s.dashboard.enabled && dashboardWeatherService(s);
+  if (refreshed) clockNow(now); // a network wait may cross a clock minute
   // Minute-granularity repaints keep the display stable and reduce work.
   int minuteKey = now.tm_yday * 1440 + now.tm_hour * 60 + now.tm_min;
-  if (lastMinute_ == minuteKey) return;
+  if (lastMinute_ == minuteKey && !refreshed) return;
   lastMinute_ = minuteKey;
+  if (s.dashboard.enabled) { dashboardRender(s, now); return; }
   d->fillScreen(C_BLACK);
   gfxDrawCentered("HANNOVER", 36, 2, C_BLUE);
   char buf[32];

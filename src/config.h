@@ -12,7 +12,7 @@
 // Firmware identity
 // ---------------------------------------------------------------------------
 #define FW_NAME     "smalltv-mod"
-#define FW_VERSION  "2.16.0-clock1"
+#define FW_VERSION  "2.16.0-dashboard1"
 
 // Project / update references (shown in the web UI; used by the GitHub self-update)
 #define REPO_URL      "https://github.com/giovi321/smalltv-mod"
@@ -379,8 +379,8 @@
 // --- Clock / night mode (device-wide) ---
 #define NTP_SERVER1             "pool.ntp.org"
 #define NTP_SERVER2             "time.nist.gov"
-#define DEFAULT_TZ_NAME         ""        // IANA display name; empty = UTC
-#define DEFAULT_TZ_POSIX        "UTC0"    // POSIX TZ rule the device feeds SNTP
+#define DEFAULT_TZ_NAME         "Europe/Berlin" // dashboard's default Hannover location
+#define DEFAULT_TZ_POSIX        "CET-1CEST,M3.5.0,M10.5.0/3"
 #define DEFAULT_NIGHT_ENABLED   false
 #define DEFAULT_NIGHT_START_MIN 1320      // 22:00
 #define DEFAULT_NIGHT_END_MIN   420       // 07:00

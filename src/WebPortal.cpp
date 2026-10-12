@@ -15,6 +15,7 @@
 #include "NotifyMode.h"
 #endif
 #include "Clock.h"
+#include "DashboardWeather.h"
 #include "WgClient.h"
 #if WITH_THEME
 #include "features/theme/ThemeWeb.h"
@@ -125,6 +126,25 @@ static void handleStatus() {
   o["synced"] = clockSynced();
   { String ts = clockTimeStr(); if (ts.length()) o["time"] = ts; }
   o["tz"]        = S->clock.tz;
+  {
+    const DashboardWeather& w = dashboardWeather();
+    JsonObject dash = o[F("dashboard")].to<JsonObject>();
+    dash[F("enabled")] = S->dashboard.enabled;
+    dash[F("weatherEnabled")] = S->dashboard.weather;
+    dash[F("weatherValid")] = w.valid;
+    dash[F("stale")] = dashboardWeatherStale();
+    dash[F("stage")] = w.stage;
+    dash[F("http")] = w.http;
+    dash[F("attempts")] = w.attempts;
+    dash[F("heapClosed")] = w.heapClosed;
+    dash[F("blockClosed")] = w.blockClosed;
+    dash[F("minSampled")] = w.minSampled;
+    if (w.valid) {
+      dash[F("temperature")] = w.temperature;
+      dash[F("weatherCode")] = w.code;
+      dash[F("observedUtc")] = w.observedUtc;
+    }
+  }
   o["night"]     = clockNightActive();   // dimming now
   o["nightHeld"] = clockNightHeld();      // in the window but waiting for a fresh NTP sync
   o["clockFresh"] = clockTrusted();       // last NTP sync within the trust window
@@ -317,6 +337,7 @@ static void handleImport() {
 
 static void handleRefresh() {
   if (!requireAuth()) return;
+  dashboardWeatherForce();
 #if WITH_TICKER
   stocksForceRefresh();
 #endif

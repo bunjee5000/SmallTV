@@ -2,6 +2,7 @@
 #include "AtomicJson.h"
 #include "Platform.h"   // platformChipId() for the unique default hostname
 #include <LittleFS.h>
+#include <math.h>
 
 static const char* CONFIG_PATH = "/config.json";
 
@@ -157,8 +158,8 @@ static String minToHhmm(uint16_t v) {
 }
 
 void ClockSettings::setDefaults() {
-  tz            = DEFAULT_TZ_NAME;
-  tzPosix       = DEFAULT_TZ_POSIX;
+  tz            = F(DEFAULT_TZ_NAME);
+  tzPosix       = F(DEFAULT_TZ_POSIX);
   nightEnabled  = DEFAULT_NIGHT_ENABLED;
   nightStartMin = DEFAULT_NIGHT_START_MIN;
   nightEndMin   = DEFAULT_NIGHT_END_MIN;
@@ -181,6 +182,40 @@ void ClockSettings::fromJson(JsonObjectConst o) {
   if (o["nightStart"].is<const char*>())  nightStartMin = hhmmToMin(o["nightStart"], nightStartMin);
   if (o["nightEnd"].is<const char*>())    nightEndMin   = hhmmToMin(o["nightEnd"], nightEndMin);
   if (o["nightLevel"].is<int>())          nightLevel = constrain((int)o["nightLevel"], 0, 100);
+}
+
+void DashboardSettings::setDefaults() {
+  lat = 52.3759f; lon = 9.7320f;
+  fajrAngle = 18; ishaAngle = 17;
+  enabled = weather = countdown = true;
+  method = DASH_MWL; asr = highLatitude = 0; hijriCorrection = 0;
+}
+void DashboardSettings::toJson(JsonObject o) const {
+  o[F("enabled")] = enabled; o[F("weather")] = weather;
+  o[F("countdown")] = countdown;
+  o[F("lat")] = lat; o[F("lon")] = lon;
+  o[F("method")] = method; o[F("asr")] = asr;
+  o[F("highLatitude")] = highLatitude;
+  o[F("fajrAngle")] = fajrAngle; o[F("ishaAngle")] = ishaAngle;
+  o[F("hijriCorrection")] = hijriCorrection;
+}
+static void dashboardNumber(JsonVariantConst v, float& target, float low, float high) {
+  if (!v.is<float>() && !v.is<int>()) return;
+  float value = v.as<float>();
+  if (isfinite(value) && value >= low && value <= high) target = value;
+}
+void DashboardSettings::fromJson(JsonObjectConst o) {
+  if (o[F("enabled")].is<bool>()) enabled = o[F("enabled")];
+  if (o[F("weather")].is<bool>()) weather = o[F("weather")];
+  if (o[F("countdown")].is<bool>()) countdown = o[F("countdown")];
+  dashboardNumber(o[F("lat")], lat, -90, 90);
+  dashboardNumber(o[F("lon")], lon, -180, 180);
+  dashboardNumber(o[F("fajrAngle")], fajrAngle, 10, 25);
+  dashboardNumber(o[F("ishaAngle")], ishaAngle, 10, 25);
+  if (o[F("method")].is<int>()) method = constrain(o[F("method")].as<int>(), 0, 4);
+  if (o[F("asr")].is<int>()) asr = constrain(o[F("asr")].as<int>(), 0, 1);
+  if (o[F("highLatitude")].is<int>()) highLatitude = constrain(o[F("highLatitude")].as<int>(), 0, 3);
+  if (o[F("hijriCorrection")].is<int>()) hijriCorrection = constrain(o[F("hijriCorrection")].as<int>(), -1, 1);
 }
 
 // ===========================================================================
@@ -448,6 +483,7 @@ void Settings::setDefaults() {
   radar.setDefaults();
   ha.setDefaults();
   clock.setDefaults();
+  dashboard.setDefaults();
   display.setDefaults();
   wg.setDefaults();
   auth.setDefaults();
@@ -539,6 +575,7 @@ void settingsToJson(const Settings& s, JsonObject root, bool includeSecrets) {
   s.radar.toJson(root["radar"].to<JsonObject>());
   s.ha.toJson(root["ha"].to<JsonObject>(), includeSecrets);
   s.clock.toJson(root["clock"].to<JsonObject>());
+  s.dashboard.toJson(root[F("dashboard")].to<JsonObject>());
   s.display.toJson(root["display"].to<JsonObject>());
   s.wg.toJson(root["wg"].to<JsonObject>(), includeSecrets);
   s.auth.toJson(root["auth"].to<JsonObject>(), includeSecrets);
@@ -631,6 +668,7 @@ void settingsApplyJson(Settings& s, JsonObjectConst root) {
   // HA has no legacy flat layout either; only apply when its object is present.
   if (root["ha"].is<JsonObjectConst>()) s.ha.fromJson(root["ha"].as<JsonObjectConst>());
   if (root["clock"].is<JsonObjectConst>()) s.clock.fromJson(root["clock"].as<JsonObjectConst>());
+  if (root[F("dashboard")].is<JsonObjectConst>()) s.dashboard.fromJson(root[F("dashboard")].as<JsonObjectConst>());
   if (root["display"].is<JsonObjectConst>()) s.display.fromJson(root["display"].as<JsonObjectConst>());
   if (root["wg"].is<JsonObjectConst>()) s.wg.fromJson(root["wg"].as<JsonObjectConst>());
   if (root["auth"].is<JsonObjectConst>()) s.auth.fromJson(root["auth"].as<JsonObjectConst>());

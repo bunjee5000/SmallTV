@@ -86,6 +86,19 @@ struct ClockSettings {
   void fromJson(JsonObjectConst o);
 };
 
+// Dashboard extends MODE_CLOCK; no String members or additional display mode.
+enum DashboardMethod : uint8_t { DASH_MWL, DASH_ISNA, DASH_EGYPT, DASH_KARACHI, DASH_CUSTOM };
+struct DashboardSettings {
+  float lat, lon;
+  float fajrAngle, ishaAngle; // used by Custom (degrees below horizon)
+  bool enabled, weather, countdown;
+  uint8_t method, asr, highLatitude; // asr: 0 = standard, 1 = Hanafi
+  int8_t hijriCorrection;
+  void setDefaults();
+  void toJson(JsonObject o) const;
+  void fromJson(JsonObjectConst o);
+};
+
 // ---- Web UI password slice (device-wide) -----------------------------------
 // Off by default: the settings page is open on the LAN, as it always was.
 // Turning it on puts every page and every API endpoint behind HTTP digest auth,
@@ -209,6 +222,7 @@ struct Settings {
   RadarSettings   radar;
   HaSettings      ha;        // MQTT broker for HA screens
   ClockSettings   clock;
+  DashboardSettings dashboard;
   DisplaySettings display;   // panel colour correction
   WgSettings      wg;        // WireGuard tunnel (ESP32 targets)
   AuthSettings    auth;      // optional web UI password

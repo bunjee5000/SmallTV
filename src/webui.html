@@ -182,6 +182,38 @@ small.hint{display:block;color:var(--mut);margin-top:4px;font-size:12px}
    <input id="nightLevel" type="range" min="0" max="100" oninput="nlVal.textContent=this.value">
    <small class="hint">Needs internet once to set the clock over NTP. The timezone also applies to theme clocks. While the window is active it overrides the brightness and auto-brightness above. Times are local to the selected timezone; DST is handled automatically. After a reboot the schedule resumes once the clock re-syncs, so the screen may show normal brightness for a few seconds.</small>
   </div>
+  <div class="card"><h2>Smart dashboard</h2>
+   <div class="chk"><input id="dashEnabled" type="checkbox"><label>Show dashboard in Digital clock mode</label></div>
+   <small class="hint">Off restores the simple clock. Use Digital clock alone, or select it with Radar in the carousel above.</small>
+   <div class="row">
+    <div><label>Latitude</label><input id="dashLat" type="number" step="0.0001" min="-90" max="90"></div>
+    <div><label>Longitude</label><input id="dashLon" type="number" step="0.0001" min="-180" max="180"></div>
+   </div>
+   <small class="hint">Default: Hannover (52.3759, 9.7320). Independent of Radar location. Choose the matching timezone above; coordinates do not change it.</small>
+   <div class="chk"><input id="dashWeather" type="checkbox"><label>Current weather (Open-Meteo)</label></div>
+   <small class="hint">Refreshes every 25 minutes while the clock is active. Last successful data stays visible on errors; stale after 90 minutes. Public weather is fetched over HTTP. <a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo</a>, CC BY 4.0.</small>
+   <label>Prayer calculation</label>
+   <select id="dashMethod" onchange="dashMethodChanged()">
+    <option value="0">Muslim World League (18 / 17 degrees)</option>
+    <option value="1">ISNA (15 / 15 degrees)</option>
+    <option value="2">Egyptian (19.5 / 17.5 degrees)</option>
+    <option value="3">Karachi (18 / 18 degrees)</option>
+    <option value="4">Custom Fajr / Isha angles</option>
+   </select>
+   <div class="row" id="dashAngles">
+    <div><label>Fajr angle</label><input id="dashFajr" type="number" step="0.1" min="10" max="25"></div>
+    <div><label>Isha angle</label><input id="dashIsha" type="number" step="0.1" min="10" max="25"></div>
+   </div>
+   <label>Asr method</label><select id="dashAsr"><option value="0">Standard (shadow factor 1)</option><option value="1">Hanafi (shadow factor 2)</option></select>
+   <label>High-latitude twilight rule</label><select id="dashHighLat">
+    <option value="0">Angle-based night portion</option><option value="1">Middle of night</option>
+    <option value="2">One seventh of night</option><option value="3">None (unavailable when no crossing)</option>
+   </select>
+   <div class="chk"><input id="dashCountdown" type="checkbox"><label>Show countdown to next prayer</label></div>
+   <small class="hint">Calculated estimates, not a mosque timetable. Solar noon for Dhuhr, sunset for Maghrib; no local precautionary offsets. Check the selected convention against your community. * marks a night-portion adjustment. Polar sunrise/sunset can be unavailable.</small>
+   <label>Hijri correction</label><select id="dashHijri"><option value="-1">-1 day</option><option value="0">No correction</option><option value="1">+1 day</option></select>
+   <small class="hint">AH~ is a tabular civil Hijri date, changing at local midnight. It may differ from official or moon-sighting dates. The eight moon phases are separate astronomical estimates.</small>
+  </div>
  </section>
 
  <!-- TICKER (feature) -->
@@ -429,6 +461,7 @@ function hideFeat(name){
 }
 function modeChanged(){if(!$('mode'))return;
  $('carouselRow').style.display=$('mode').value==='carousel'?'block':'none';}
+function dashMethodChanged(){var e=$('dashAngles');if(e)e.style.display=gv('dashMethod')==='4'?'flex':'none';}
 
 // The AP password is never read back into the form, so a blank field cannot be
 // told apart from "the user cleared it". Blank therefore keeps the stored one,
@@ -474,6 +507,12 @@ function loadConfig(){return j('/api/config').then(function(c){C=c;
  sv('tz',ck.tz||''); sc('nightEnabled',!!ck.nightEnabled);
  sv('nightStart',ck.nightStart||'22:00'); sv('nightEnd',ck.nightEnd||'07:00');
  sv('nightLevel',ck.nightLevel!=null?ck.nightLevel:0); $('nlVal')&&($('nlVal').textContent=(ck.nightLevel!=null?ck.nightLevel:0));
+ var ds=c.dashboard||{};
+ sc('dashEnabled',ds.enabled!==false); sc('dashWeather',ds.weather!==false); sc('dashCountdown',ds.countdown!==false);
+ sv('dashLat',ds.lat!=null?ds.lat:52.3759); sv('dashLon',ds.lon!=null?ds.lon:9.7320);
+ sv('dashMethod',ds.method!=null?ds.method:0); sv('dashAsr',ds.asr!=null?ds.asr:0);
+ sv('dashHighLat',ds.highLatitude!=null?ds.highLatitude:0); sv('dashHijri',ds.hijriCorrection||0);
+ sv('dashFajr',ds.fajrAngle!=null?ds.fajrAngle:18); sv('dashIsha',ds.ishaAngle!=null?ds.ishaAngle:17); dashMethodChanged();
  $('mode').value=c.mode||'stocks'; modeChanged();
  sv('carouselSec',c.carouselSec||30);
  sc('carouselTicker',c.carouselTicker!==false); sc('carouselUsage',c.carouselUsage!==false); sc('carouselRadar',c.carouselRadar!==false);
@@ -620,6 +659,10 @@ function collect(){
   nightEnabled:gc('nightEnabled'),nightStart:gv('nightStart')||'22:00',
   nightEnd:gv('nightEnd')||'07:00',nightLevel:parseInt(gv('nightLevel'))||0};}
  // radar slice
+ if($('dashEnabled')) o.dashboard={enabled:gc('dashEnabled'),weather:gc('dashWeather'),countdown:gc('dashCountdown'),
+  lat:parseFloat(gv('dashLat')),lon:parseFloat(gv('dashLon')),method:parseInt(gv('dashMethod')),
+  asr:parseInt(gv('dashAsr')),highLatitude:parseInt(gv('dashHighLat')),hijriCorrection:parseInt(gv('dashHijri')),
+  fajrAngle:parseFloat(gv('dashFajr')),ishaAngle:parseFloat(gv('dashIsha'))};
  if($('radar')){
   var r={lat:parseFloat(gv('radarLat'))||0, lon:parseFloat(gv('radarLon'))||0,
    rangeKm:parseInt(gv('rangeKm'))||20, unitsMi:gv('unitsMi')==='true',
@@ -713,6 +756,9 @@ function loadStatus(){j('/api/status').then(function(s){
   kv('Free heap',s.heap+' B'+(s.maxblk?' ('+s.maxblk+' B largest block)':''))+
   kv('Uptime',fmtUp(s.uptime))+kv('Last reset',s.reset||'-')+
   ((s.wg&&s.wg.compiledIn)?kv('VPN',s.wg.held?'held':(s.wg.up?'up':(s.wg.enabled?'connecting':'off'))):'')+
+  (s.dashboard?kv('Dashboard weather',!s.dashboard.enabled?'dashboard off':!s.dashboard.weatherEnabled?'off':
+   (s.dashboard.weatherValid?s.dashboard.temperature.toFixed(1)+' C'+(s.dashboard.stale?' (stale)':''):'pending')+
+   (s.dashboard.stage>1?' - '+(['','','low heap','connection error','HTTP error','invalid response'][s.dashboard.stage]||'retrying'):'')):'')+
   (s.radar?kv('Radar',radarLine(s.radar)):'');
  var wgs=$('wgStatus'); if(wgs)wgs.textContent=wgLine(s.wg);
  var tb=$('tickBox');
