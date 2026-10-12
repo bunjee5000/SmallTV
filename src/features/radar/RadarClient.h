@@ -36,3 +36,10 @@ uint16_t    radarTlsRx();                // negotiated BearSSL rx buffer (0 = no
 uint16_t    radarSeenAc();               // aircraft in the last parsed response
 uint32_t    radarLastTryMs();            // millis() of the last attempt
 const String& radarLastUrl();            // URL of the last attempt (which feed, what range)
+
+// Stage snapshots, not an allocation tracer: transient TLS/JSON minima between
+// samples can be lower. Retained across polls to expose gradual heap erosion.
+struct RadarMemory {
+  uint32_t polls, before, headers, json, afterParse, closed, closedBlock, minSampled;
+};
+const RadarMemory& radarMemory();

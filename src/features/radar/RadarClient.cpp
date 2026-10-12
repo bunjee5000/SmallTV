@@ -32,6 +32,14 @@ static int        g_lastHttp = 0;
 static uint16_t   g_seenAc = 0;
 static uint32_t   g_lastTryMs = 0;
 static String     g_lastUrl;
+static RadarMemory g_memory = {};
+
+static uint32_t sampleHeap() {
+  uint32_t heap = ESP.getFreeHeap();
+  if (!g_memory.minSampled || heap < g_memory.minSampled) g_memory.minSampled = heap;
+  return heap;
+}
+const RadarMemory& radarMemory() { return g_memory; }
 
 uint8_t         radarCount()      { return g_count; }
 const Aircraft& aircraftAt(uint8_t i) { return g_ac[i]; }
@@ -167,6 +175,7 @@ static bool parseAdsb(const Settings& s, Stream& stream) {
   JsonDocument doc;
   DeserializationError err =
       deserializeJson(doc, stream, DeserializationOption::Filter(filter));
+  g_memory.json = sampleHeap();   // both JSON documents still alive
   if (err) { g_stage = RADAR_PARSE_FAIL; return false; }
 
   JsonArrayConst ac = doc["ac"].as<JsonArrayConst>();
@@ -181,8 +190,6 @@ static bool parseAdsb(const Settings& s, Stream& stream) {
     if (!a["lon"].is<float>() && !a["lon"].is<int>()) continue;
 
     Aircraft t;
-    t.lat = a["lat"].as<float>();
-    t.lon = a["lon"].as<float>();
     t.track = (a["track"].is<float>() || a["track"].is<int>()) ? a["track"].as<float>() : NAN;
     t.gs    = (a["gs"].is<float>()    || a["gs"].is<int>())    ? a["gs"].as<float>()    : NAN;
     t.altFt = a["alt_baro"].is<int>() ? a["alt_baro"].as<int>() : 0;  // "ground" => 0
@@ -194,7 +201,8 @@ static bool parseAdsb(const Settings& s, Stream& stream) {
     strlcpy(t.callsign, fl, sizeof(t.callsign));
     trimTail(t.callsign);
 
-    geo(s.radar.lat, s.radar.lon, t.lat, t.lon, t.distKm, t.bearingDeg);
+    geo(s.radar.lat, s.radar.lon, a["lat"].as<float>(), a["lon"].as<float>(),
+        t.distKm, t.bearingDeg);
     insertNearest(t);
   }
 
@@ -239,6 +247,7 @@ static bool fetchUrl(const Settings& s, const String& url) {
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 
   int code = http.GET();
+  g_memory.headers = sampleHeap();
   g_lastHttp = code;
   if (code != HTTP_CODE_OK) {
     http.end();
@@ -249,6 +258,7 @@ static bool fetchUrl(const Settings& s, const String& url) {
   }
 
   bool ok = parseAdsb(s, http.getStream());
+  g_memory.afterParse = sampleHeap();   // JSON documents have been destroyed
   http.end();
   return ok;
 }
@@ -262,8 +272,13 @@ void radarService(const Settings& s) {
   g_nextPollMs = millis() + (uint32_t)s.radar.pollSec * 1000UL;
 
   bool useWebhook = (s.radar.source == RADAR_SRC_WEBHOOK) && (s.radar.webhookUrl.length() >= 8);
-  String url = useWebhook ? buildWebhookUrl(s) : buildDirectUrl(s);
-  g_lastUrl = url;
+  g_lastUrl = useWebhook ? buildWebhookUrl(s) : buildDirectUrl(s);
   g_lastTryMs = millis();
-  if (!fetchUrl(s, url)) g_error = true;   // keep stale aircraft, flag the error
+  ++g_memory.polls;
+  g_memory.headers = g_memory.json = g_memory.afterParse = 0;
+  g_memory.before = sampleHeap();
+  if (!fetchUrl(s, g_lastUrl)) g_error = true;   // keep stale aircraft, flag the error
+  // fetchUrl's HTTP client and socket objects are now destroyed, on all paths.
+  g_memory.closed = sampleHeap();
+  g_memory.closedBlock = platformMaxFreeBlock();
 }

@@ -196,15 +196,6 @@ void setup() {
 
   Serial.println("[boot] net");
   netBegin(g_settings, bootProgress);
-  // Arm SNTP now that WiFi (STA) is up — but only if night mode is enabled, so a
-  // ticker-only device doesn't pay the SNTP heap cost (which can starve the cash.ch
-  // TLS handshake on the ESP8266). clockReapply arms it iff needed. Skipped after a
-  // crash so a fault in here can't boot-loop before the web server starts (the
-  // device then comes up in safe mode, OTA-recoverable, instead of needing UART).
-  // ...unless a WireGuard tunnel is configured, which needs the clock and only
-  // exists on an ESP32 where the heap argument for the skip does not apply.
-  if (!g_safeMode || wgNeedsClock(g_settings)) clockReapply(g_settings);
-
   // Optional WireGuard tunnel (ESP32 targets). Arms the state machine only;
   // the bring-up itself runs from loop(), so nothing here can delay the web
   // server. A crash last boot feeds the three-strikes hold that keeps a bad
@@ -221,6 +212,12 @@ void setup() {
     gfxBoot("SmallTV", "update failed");   // still here -> failed; details in the web UI
     delay(1200);
   }
+
+  // Start SNTP only after a queued OTA attempt: its persistent allocation can
+  // fragment the contiguous heap needed for the ESP8266 update's TLS buffers.
+  // clockReapply enables it for night mode, clock displays, or WireGuard.
+  // Skip after a crash so clock failures cannot block web-based recovery.
+  if (!g_safeMode || wgNeedsClock(g_settings)) clockReapply(g_settings);
 
   Serial.println("[boot] web");
   webPortalBegin(g_settings);

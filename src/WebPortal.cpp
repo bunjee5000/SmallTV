@@ -165,6 +165,16 @@ static void handleStatus() {
     if (radarLastTryMs()) r["triedAgo"] = (millis() - radarLastTryMs()) / 1000;
     if (radarLastOkMs())  r["okAgo"]    = (millis() - radarLastOkMs()) / 1000;
     if (radarLastUrl().length()) r["url"] = radarLastUrl();
+    const RadarMemory& m = radarMemory();
+    JsonObject mem = r[F("memory")].to<JsonObject>();
+    mem[F("polls")] = m.polls;
+    mem[F("before")] = m.before;
+    mem[F("headers")] = m.headers;
+    mem[F("json")] = m.json;
+    mem[F("afterParse")] = m.afterParse;
+    mem[F("closed")] = m.closed;
+    mem[F("closedBlock")] = m.closedBlock;
+    mem[F("minSampled")] = m.minSampled;
   }
 #endif
 

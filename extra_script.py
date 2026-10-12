@@ -1,10 +1,14 @@
 Import("env")
 import os
 import subprocess
+import runpy
 
 # Windows: SCons's default cmd.exe-based SPAWN can mis-tokenize quoted/long
 # build-tool command lines, dropping args. This re-tokenizes and dispatches directly.
 PROJECT_DIR = env.subst("$PROJECT_DIR")
+
+# The web server serves this compressed header, not the HTML source.
+runpy.run_path(os.path.join(PROJECT_DIR, "tools", "gzip_webui.py"), run_name="__main__")
 
 
 def _tokenize(cmdline):
