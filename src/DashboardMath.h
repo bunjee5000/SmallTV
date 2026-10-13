@@ -10,6 +10,10 @@ typedef struct {
   uint8_t adjusted;  // bit 0 = Fajr, bit 4 = Isha: night-portion adjustment
 } DashboardDay;
 typedef struct { int16_t year; uint8_t month, day; } DashboardHijri;
+// cycle is normalized geocentric Moon-minus-Sun longitude (elongation), not
+// elapsed lunar age. 0=new, .25=first quarter, .5=full, .75=last quarter.
+// Illumination approximation: (1-cos(2*pi*cycle))/2. Primary phase labels
+// span +/-3.6 degrees; intervening sectors describe crescents/gibbous phases.
 typedef struct { uint8_t index; float cycle; } DashboardMoon;
 
 #ifdef __cplusplus

@@ -20,9 +20,18 @@ inline void yield() {}
 template<class T> inline T constrain(T value, T low, T high) { return value<low ? low : value>high ? high : value; }
 // Fixed 12 October 2026 16:37 CEST for a reproducible visual fixture.
 extern time_t dashboardTestEpoch;
+// A TU can opt into variable offsets; firmware still uses actual localtime_r.
+#ifdef DASHBOARD_TEST_TIMEZONES
+extern int dashboardTestOffsetSeconds;
+#endif
 inline time_t dashboardTestTime(time_t*) { return dashboardTestEpoch; }
 inline struct tm* dashboardTestLocaltime(const time_t* stamp, struct tm* out) {
-  time_t local = *stamp + 7200;
+  time_t local = *stamp +
+#ifdef DASHBOARD_TEST_TIMEZONES
+    dashboardTestOffsetSeconds;
+#else
+    7200;
+#endif
   *out = *gmtime(&local);
   return out;
 }

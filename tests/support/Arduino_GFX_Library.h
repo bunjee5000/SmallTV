@@ -12,6 +12,10 @@ class Arduino_GFX {
   int x = 0, y = 0, size = 1;
   uint16_t color = 0xffff;
   bool clipGeometry = false;
+  int textMargin = 0;
+  bool checkTextOverlap = false;
+  struct TextBox { int x, y, w, h; };
+  std::vector<TextBox> textBoxes;
   std::vector<std::string> strings;
   void setTextSize(int s) { size=s; }
   void setTextColor(uint16_t c) { color=c; }
@@ -25,7 +29,11 @@ class Arduino_GFX {
   void fillRect(int a,int b,int w,int h,uint16_t c) {
     for(int j=0;j<h;j++) for(int i=0;i<w;i++) drawPixel(a+i,b+j,c);
   }
-  void fillScreen(uint16_t c) { std::fill(pixels.begin(),pixels.end(),c); textRows=0; strings.clear(); }
+  void fillScreen(uint16_t c) { std::fill(pixels.begin(),pixels.end(),c); textRows=0; strings.clear(); textBoxes.clear(); }
+  // Matches Arduino_GFX::charBounds for the installed fixed 6x8 font.
+  void getTextBounds(const char* value,int16_t a,int16_t b,int16_t* x1,int16_t* y1,uint16_t* w,uint16_t* h) {
+    *x1=a; *y1=b; *w=strlen(value)*6*size; *h=*value ? 8*size : 0;
+  }
   void fillTriangle(int ax,int ay,int bx,int by,int cx,int cy,uint16_t c) {
     auto cross=[](int x1,int y1,int x2,int y2,int px,int py) { return (px-x1)*(y2-y1)-(py-y1)*(x2-x1); };
     int minX=std::min(ax,std::min(bx,cx)),maxX=std::max(ax,std::max(bx,cx));
@@ -54,10 +62,18 @@ class Arduino_GFX {
     }
   }
   void print(const char* value) {
-    assert(x>=0 && x+(int)strlen(value)*6*size<=240 && y>=0 && y+8*size<=240);
+    int16_t bx,by; uint16_t bw,bh;
+    getTextBounds(value,x,y,&bx,&by,&bw,&bh);
+    if(!(bx>=textMargin && bx+bw<=240-textMargin && by>=textMargin && by+bh<=240-textMargin))
+      fprintf(stderr,"Text outside margin: '%s' at %d,%d, size %u x %u\n",value,bx,by,bw,bh);
+    assert(bx>=textMargin && bx+bw<=240-textMargin && by>=textMargin && by+bh<=240-textMargin);
+    if(checkTextOverlap && bw && bh) for(const auto& box:textBoxes)
+      assert(!(bx<box.x+box.w && bx+bw>box.x && by<box.y+box.h && by+bh>box.y));
+    textBoxes.push_back({bx,by,bw,bh});
     ++textRows;
     strings.emplace_back(value);
-    for(;*value;value++) { unsigned ch=(unsigned char)*value; assert(ch>=32 && ch<127);
+    for(;*value;value++) { unsigned ch=(unsigned char)*value;
+      assert((ch>=32 && ch<127) || ch==129 || ch==132 || ch==148 || ch==248);
       for(int i=0;i<5;i++) for(int j=0;j<8;j++) if(font[ch*5+i]&(1<<j)) fillRect(x+i*size,y+j*size,size,size,color);
       x+=6*size;
     }

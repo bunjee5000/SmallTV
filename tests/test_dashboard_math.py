@@ -5,6 +5,7 @@ Usage: python tests/test_dashboard_math.py path/to/dashboard_math.dll (or .so)
 import ctypes as c
 import datetime as dt
 import json
+import math
 from pathlib import Path
 import sys
 import unittest
@@ -78,9 +79,59 @@ class DashboardMathTests(unittest.TestCase):
             error = min(error, 1-error) * 360
             worst = max(worst, error)
             self.assertLess(error, 2, (ref, error))
-        seen = {library.dashboardMoon((day(2026, 1, 1)+d)*86400).index for d in range(40)}
+        seen = {library.dashboardMoon(day(2026, 1, 1)*86400+h*3600).index for h in range(40*24)}
         self.assertEqual(seen, set(range(8)))
         print(f'Moon primary-phase maximum longitude error: {worst:.3f} degrees')
+
+    def test_moon_illumination_against_usno(self):
+        worst=0
+        for ref in fixture('usno_moon_illumination_2026.json')['data']:
+            local=dt.datetime.fromisoformat(ref['date']+'T'+ref['local_time']).replace(
+                tzinfo=dt.timezone(dt.timedelta(hours=ref['utc_offset'])))
+            self.assertEqual(int(local.timestamp()),ref['epoch'])
+            result=library.dashboardMoon(ref['epoch'])
+            fraction=(1-math.cos(result.cycle*2*math.pi))/2
+            error=abs(fraction-ref['illumination'])
+            worst=max(worst,error)
+            self.assertLess(error,0.015,(ref,fraction)) # USNO rounds to whole %
+            if ref['phase']=='Waxing Crescent':
+                self.assertTrue(0<result.cycle<0.25,(ref,result.cycle))
+                if fraction<0.4 and fraction>0.005:
+                    self.assertEqual(result.index,1,(ref,result.index))
+            elif ref['phase']=='Waning Crescent':
+                self.assertTrue(0.75<result.cycle<1,(ref,result.cycle))
+        print(f'USNO local-noon illumination: max difference {worst*100:.3f} percentage points')
+
+    def test_moon_transitions_and_midnight(self):
+        start=day(2026,10,1)*86400
+        previous=library.dashboardMoon(start)
+        transitions=set()
+        for epoch in range(start+600,start+40*86400,600):
+            result=library.dashboardMoon(epoch)
+            boundaries=[0.01,0.24,0.26,0.49,0.51,0.74,0.76,0.99]
+            expected=next((i for i,b in enumerate(boundaries) if result.cycle<b),0)
+            self.assertEqual(result.index,expected)
+            self.assertLess((result.cycle-previous.cycle)%1,0.001)
+            if result.index!=previous.index:
+                self.assertEqual(result.index,(previous.index+1)%8)
+                transitions.add(result.index)
+            previous=result
+        self.assertEqual(transitions,set(range(8)))
+        for offset in [-12,-7,0,1,2,5.5,14]:
+            for date in [10,12,13,18,26]:
+                midnight=day(2026,10,date)*86400-int(offset*3600)
+                before=library.dashboardMoon(midnight-1)
+                after=library.dashboardMoon(midnight+1)
+                self.assertLess((after.cycle-before.cycle)%1,0.0001)
+        # Waxing/waning changes at conjunction/opposition, not local midnight.
+        for ref in fixture('usno_moon_2026.json')['data']:
+            if ref['month']!=10 or ref['phase'] not in ['New Moon','Full Moon']: continue
+            h,m=map(int,ref['time'].split(':'))
+            epoch=day(ref['year'],ref['month'],ref['day'])*86400+h*3600+m*60
+            before=library.dashboardMoon(epoch-3600).cycle
+            after=library.dashboardMoon(epoch+3600).cycle
+            if ref['phase']=='New Moon': self.assertTrue(before>0.95 and after<0.05)
+            else: self.assertTrue(before<0.5 and after>0.5)
 
     def test_prayer_conventions_against_reference(self):
         angles = {'MWL': (18, 17), 'ISNA': (15, 15), 'Egypt': (19.5, 17.5), 'Karachi': (18, 18)}

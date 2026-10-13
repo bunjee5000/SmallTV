@@ -49,6 +49,11 @@ int main(int argc,char** argv) {
       s.radar.uiScale=scale; enrich=routes;
       aircraft[0].bearingDeg=bearing; aircraft[0].distKm=distance;
       ++stamp; g_radarMode.service(s); ++cases;
+      if(distance<=20) {
+        const char* flight=routes ? "TK 1554" : "THY1554";
+        assert(std::find(display.strings.begin(),display.strings.end(),flight)!=display.strings.end());
+        assert(std::find(display.strings.begin(),display.strings.end(),"FL350")!=display.strings.end());
+      }
     }
   count=24;
   for(int i=0;i<24;++i) {

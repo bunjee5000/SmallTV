@@ -1,0 +1,154 @@
+{
+  "source": "USNO Complete Sun and Moon Data: phase/illumination at local noon",
+  "retrieved": "2026-10-13",
+  "coordinates": [
+    52.3759,
+    9.732
+  ],
+  "data": [
+    {
+      "date": "2026-10-03",
+      "local_time": "12:00",
+      "utc_offset": 2,
+      "epoch": 1791021600,
+      "phase": "Waning Gibbous",
+      "illumination": 0.52,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-10-03&coords=52.3759,9.7320&tz=2"
+    },
+    {
+      "date": "2026-10-06",
+      "local_time": "12:00",
+      "utc_offset": 2,
+      "epoch": 1791280800,
+      "phase": "Waning Crescent",
+      "illumination": 0.2,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-10-06&coords=52.3759,9.7320&tz=2"
+    },
+    {
+      "date": "2026-10-10",
+      "local_time": "12:00",
+      "utc_offset": 2,
+      "epoch": 1791626400,
+      "phase": "New Moon",
+      "illumination": 0.0,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-10-10&coords=52.3759,9.7320&tz=2"
+    },
+    {
+      "date": "2026-10-12",
+      "local_time": "12:00",
+      "utc_offset": 2,
+      "epoch": 1791799200,
+      "phase": "Waxing Crescent",
+      "illumination": 0.03,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-10-12&coords=52.3759,9.7320&tz=2"
+    },
+    {
+      "date": "2026-10-13",
+      "local_time": "12:00",
+      "utc_offset": 2,
+      "epoch": 1791885600,
+      "phase": "Waxing Crescent",
+      "illumination": 0.08,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-10-13&coords=52.3759,9.7320&tz=2"
+    },
+    {
+      "date": "2026-10-15",
+      "local_time": "12:00",
+      "utc_offset": 2,
+      "epoch": 1792058400,
+      "phase": "Waxing Crescent",
+      "illumination": 0.21,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-10-15&coords=52.3759,9.7320&tz=2"
+    },
+    {
+      "date": "2026-10-18",
+      "local_time": "12:00",
+      "utc_offset": 2,
+      "epoch": 1792317600,
+      "phase": "Waxing Crescent",
+      "illumination": 0.48,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-10-18&coords=52.3759,9.7320&tz=2"
+    },
+    {
+      "date": "2026-10-22",
+      "local_time": "12:00",
+      "utc_offset": 2,
+      "epoch": 1792663200,
+      "phase": "Waxing Gibbous",
+      "illumination": 0.84,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-10-22&coords=52.3759,9.7320&tz=2"
+    },
+    {
+      "date": "2026-10-26",
+      "local_time": "12:00",
+      "utc_offset": 2,
+      "epoch": 1793008800,
+      "phase": "Full Moon",
+      "illumination": 1.0,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-10-26&coords=52.3759,9.7320&tz=2"
+    },
+    {
+      "date": "2026-10-29",
+      "local_time": "12:00",
+      "utc_offset": 2,
+      "epoch": 1793268000,
+      "phase": "Waning Gibbous",
+      "illumination": 0.86,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-10-29&coords=52.3759,9.7320&tz=2"
+    },
+    {
+      "date": "2026-11-01",
+      "local_time": "12:00",
+      "utc_offset": 1,
+      "epoch": 1793530800,
+      "phase": "Waning Gibbous",
+      "illumination": 0.55,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-11-01&coords=52.3759,9.7320&tz=1"
+    },
+    {
+      "date": "2026-11-05",
+      "local_time": "12:00",
+      "utc_offset": 1,
+      "epoch": 1793876400,
+      "phase": "Waning Crescent",
+      "illumination": 0.15,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-11-05&coords=52.3759,9.7320&tz=1"
+    },
+    {
+      "date": "2026-10-13",
+      "local_time": "12:00",
+      "utc_offset": 0,
+      "epoch": 1791892800,
+      "phase": "Waxing Crescent",
+      "illumination": 0.08,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-10-13&coords=52.3759,9.7320&tz=0"
+    },
+    {
+      "date": "2026-10-13",
+      "local_time": "12:00",
+      "utc_offset": -7,
+      "epoch": 1791918000,
+      "phase": "Waxing Crescent",
+      "illumination": 0.1,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-10-13&coords=52.3759,9.7320&tz=-7"
+    },
+    {
+      "date": "2026-10-13",
+      "local_time": "12:00",
+      "utc_offset": 5.5,
+      "epoch": 1791873000,
+      "phase": "Waxing Crescent",
+      "illumination": 0.07,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-10-13&coords=52.3759,9.7320&tz=5.5"
+    },
+    {
+      "date": "2026-10-13",
+      "local_time": "12:00",
+      "utc_offset": 14,
+      "epoch": 1791842400,
+      "phase": "Waxing Crescent",
+      "illumination": 0.05,
+      "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-10-13&coords=52.3759,9.7320&tz=14"
+    }
+  ]
+}

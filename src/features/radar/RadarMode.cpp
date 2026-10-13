@@ -63,6 +63,8 @@ static void drawRadar(const Settings& s) {
   const uint8_t txt = (sc == 0) ? 1 : 2;                          // built-in font scale
   const float   k = (sc == 0) ? 0.65f : (sc == 2 ? 1.5f : 1.0f);  // marker geometry scale
   const int lblDX = scaleR(9, k);
+  const int labelTop = txt==1 ? 20 : 28;
+  gfx->setTextWrap(false);
   gfx->fillScreen(C_BLACK);
 
   // Range rings + crosshair + N marker.
@@ -75,7 +77,7 @@ static void drawRadar(const Settings& s) {
   // Reserve existing overlays/airport labels as well as flight labels.
   RadarLabelBox labels[MAX_AIRCRAFT+MAX_AIRPORTS+2];
   uint8_t nLabels=0;
-  labels[nLabels++]={0,0,TFT_WIDTH,(int16_t)(txt==1 ? 20 : 28)};
+  labels[nLabels++]={0,0,TFT_WIDTH,(int16_t)labelTop};
   labels[nLabels++]={(int16_t)(CX-5),(int16_t)(CY-5),10,10};
 
   // Home-area airports (projected like aircraft).
@@ -146,7 +148,7 @@ static void drawRadar(const Settings& s) {
     const RadarRouteInfo* route=s.radar.showRoutes ? radarRouteFor(a.callsign) : nullptr;
     char flight[10]; radarFlightLabel(a.callsign,route,flight);
     RadarLabelBox box;
-    if(radarPlaceLabel(x,y,lblDX,strlen(flight)*6*txt,8*txt,labels,nLabels,-1,box)) {
+    if(radarPlaceLabel(x,y,lblDX,gfxTextW(flight,txt),GFX_FONT_H*txt,labels,nLabels,-1,box,labelTop)) {
       labelAircraft[nFlight++]=i;
       labels[nLabels++]=box;
     }
@@ -167,20 +169,20 @@ static void drawRadar(const Settings& s) {
       bool r=airports[0] && attempt<2;
       bool f=altitude[0] && attempt!=1;
       if(!r && !f) continue;
-      int width=strlen(flight)*6*txt;
-      int rw=r ? strlen(airports)*6 : 0, fw=f ? strlen(altitude)*6 : 0;
+      int width=gfxTextW(flight,txt);
+      int rw=r ? gfxTextW(airports,1) : 0, fw=f ? gfxTextW(altitude,1) : 0;
       if(rw>width) width=rw;
       if(fw>width) width=fw;
-      int height=8*txt+(r ? 10 : 0)+(f ? 10 : 0);
+      int height=GFX_FONT_H*txt+(r ? GFX_FONT_H+2 : 0)+(f ? GFX_FONT_H+2 : 0);
       RadarLabelBox box;
-      if(radarPlaceLabel(x,y,lblDX,width,height,labels,nLabels,slot,box)) {
+      if(radarPlaceLabel(x,y,lblDX,width,height,labels,nLabels,slot,box,labelTop)) {
         labels[slot]=box; showRoute=r; showAlt=f; break;
       }
     }
     const RadarLabelBox& box=labels[slot];
     gfx->setTextSize(txt); gfx->setTextColor(C_GRAY);
     gfx->setCursor(box.x,box.y); gfx->print(flight);
-    int lineY=box.y+8*txt+2;
+    int lineY=box.y+GFX_FONT_H*txt+2;
     if(showRoute) {
       gfx->setTextSize(1); gfx->setTextColor(C_BLUE);
       gfx->setCursor(box.x,lineY); gfx->print(airports); lineY+=10;

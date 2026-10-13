@@ -66,7 +66,14 @@ DashboardMoon dashboardMoon(int64_t utcSeconds) {
        + 0.053f*sind(2*e+m) + 0.046f*sind(2*e-s)
        + 0.041f*sind(s-m) - 0.035f*sind(e) - 0.031f*sind(s+m);
   float cycle = norm(l - solarLongitude(d), 360) / 360;
-  DashboardMoon result = {(uint8_t)((int)floorf(cycle * 8 + 0.5f) % 8), (float)cycle};
+  // Primary phases get a narrow +/-3.6 degree window. Nearest-45-degree
+  // classification called a visible 3.3% crescent "new" on 12 Oct 2026.
+  // Outside these windows describe the continuously shaded crescent/gibbous.
+  uint8_t index = cycle < 0.01f || cycle >= 0.99f ? 0 :
+                  cycle < 0.24f ? 1 : cycle < 0.26f ? 2 :
+                  cycle < 0.49f ? 3 : cycle < 0.51f ? 4 :
+                  cycle < 0.74f ? 5 : cycle < 0.76f ? 6 : 7;
+  DashboardMoon result = {index, cycle};
   return result;
 }
 

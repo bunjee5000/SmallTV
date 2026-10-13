@@ -7,31 +7,35 @@
 
 static DashboardDay g_days[3];
 static int32_t g_day = INT32_MIN;
-static const char hijriMonths[][20] PROGMEM = {
-  "Muharram", "Safar", "Rabi al-Awwal", "Rabi al-Thani", "Jumada al-Awwal",
-  "Jumada al-Thani", "Rajab", "Sha'ban", "Ramadan", "Shawwal", "Dhu al-Qadah", "Dhu al-Hijjah"
-};
-static const char moonNames[][18] PROGMEM = {
-  "New moon", "Waxing crescent", "First quarter", "Waxing gibbous",
-  "Full moon", "Waning gibbous", "Last quarter", "Waning crescent"
+// Built-in glcdfont uses CP437 bytes directly (not UTF-8): ä=132, ö=148, °=248.
+// Two size-2 lines give phase names the same weight as the temperature.
+static const char moonNames[][2][9] PROGMEM = {
+  {"Neumond", ""}, {"Zun.", "Sichel"}, {"Erstes", "Viertel"}, {"Zun.", "Mond"},
+  {"Vollmond", ""}, {"Abn.", "Mond"}, {"Letztes", "Viertel"}, {"Abn.", "Sichel"}
 };
 static const char prayerNames[][8] PROGMEM = {"Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"};
-static const char methodNames[][8] PROGMEM = {"MWL", "ISNA", "Egypt", "Karachi", "Custom"};
-static const char weekdays[][4] PROGMEM = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-static const char months[][4] PROGMEM = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+static const char weekdays[][3] PROGMEM = {"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"};
+static const char months[][5] PROGMEM = {"Jan", "Feb", "M\x84rz", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"};
 
 void dashboardInvalidate(const Settings& s) {
   g_day = INT32_MIN;
   dashboardWeatherApply(s.dashboard);
 }
-static void text(Arduino_GFX* d, int x, int y, uint8_t size, uint16_t color, const char* value) {
-  d->setTextSize(size); d->setTextColor(color); d->setCursor(x, y); d->print(value);
-}
-static void flashText(Arduino_GFX* d, int x, int y, uint8_t size, uint16_t color, const char* value) {
-  d->setTextSize(size); d->setTextColor(color); d->setCursor(x, y); d->print(FPSTR(value));
+// Center using the renderer's actual bounds, including glyph offsets. Flash
+// strings stay in flash; measurement and printing allocate no temporary String.
+static void centered(Arduino_GFX* d, int cx, int y, uint8_t size, uint16_t color,
+                     const char* value, bool inFlash = false) {
+  d->setTextSize(size);
+  int16_t x1, y1;
+  uint16_t w, h;
+  if (inFlash) d->getTextBounds(FPSTR(value), 0, 0, &x1, &y1, &w, &h);
+  else d->getTextBounds(value, 0, 0, &x1, &y1, &w, &h);
+  d->setTextColor(color); d->setCursor(cx-w/2-x1, y-y1);
+  if (inFlash) d->print(FPSTR(value));
+  else d->print(value);
 }
 static void centerFlash(Arduino_GFX* d, int y, uint8_t size, uint16_t color, const char* value) {
-  flashText(d, (240 - strlen_P(value) * 6 * size) / 2, y, size, color, value);
+  centered(d, 120, y, size, color, value, true);
 }
 static void cloud(Arduino_GFX* d, int x, int y, uint16_t color) {
   d->fillCircle(x-6, y, 6, color); d->fillCircle(x+1, y-4, 8, color);
@@ -57,10 +61,10 @@ static int weatherKind(int code) {
   return 7;
 }
 static const char weatherNames[][14] PROGMEM = {
-  "Clear", "Partly cloudy", "Cloudy", "Rain", "Snow", "Fog", "Thunderstorm", "Unknown"
+  "Klar", "Leicht bew.", "Bew\x94lkt", "Regen", "Schnee", "Nebel", "Gewitter", "Unbekannt"
 };
 static void weatherIcon(Arduino_GFX* d, int kind) {
-  const int x = 23, y = 123;
+  const int x = 60, y = 110;
   uint16_t accent = gfxTint(0x5E9F);
   if (kind == 0) { sun(d, x, y, accent); return; }
   if (kind == 1) sun(d, x-5, y-5, accent);
@@ -77,17 +81,22 @@ static void weatherIcon(Arduino_GFX* d, int kind) {
   if (kind == 7) d->drawCircle(x, y, 10, C_DGRAY);
 }
 static void moonIcon(Arduino_GFX* d, float cycle) {
-  const int cx = 23, cy = 162, radius = 11;
-  d->fillCircle(cx, cy, radius, C_DGRAY);
+  const int cx = 180, cy = 110, radius = 14;
+  // The unlit hemisphere must look dark, not like a second illuminated disk.
+  d->fillCircle(cx, cy, radius, gfxTint(0x1082));
   float terminator = cosf(cycle * 2 * (float)PI);
+  if (fabsf(terminator) < 0.00001f) terminator = 0; // stable exact quarters
   for (int y = -radius+1; y < radius; ++y) {
     int half = (int)sqrtf((float)(radius*radius - y*y));
-    int edge = lroundf(terminator * half);
+    // Sample pixel centers. Inclusive endpoints give mirror-symmetric waxing
+    // and waning crescents, zero light at new and a filled interior at full.
+    int edge = (int)ceilf(terminator * (half + 0.5f));
+    if (edge < -half) edge = -half;
     int left = cycle < 0.5f ? edge : -half;
     int right = cycle < 0.5f ? half : -edge;
-    if (right > left) d->drawFastHLine(cx+left, cy+y, right-left, C_WHITE);
+    if (right >= left) d->drawFastHLine(cx+left, cy+y, right-left+1, C_WHITE);
   }
-  d->drawCircle(cx, cy, radius, C_GRAY);
+  d->drawCircle(cx, cy, radius, C_DGRAY);
 }
 static void clockText(int64_t utc, char out[6]) {
   time_t stamp = (time_t)utc;
@@ -123,41 +132,43 @@ void dashboardRender(const Settings& settings, const struct tm& now) {
   updateDay(s, day);
   int64_t epoch = time(nullptr);
   uint16_t accent = gfxTint(0x5E9F); // one soft cyan accent
-  char buf[64], name[20];
+  char buf[40], name[8]; // fixed stack buffers; no Strings or heap allocations
   d->setTextWrap(false);
   d->fillScreen(C_BLACK);
   snprintf_P(buf, sizeof(buf), PSTR("%02d:%02d"), now.tm_hour, now.tm_min);
-  gfxDrawCentered(buf, 12, 5, C_WHITE);
+  centered(d, 120, 10, 5, C_WHITE, buf);
   // Avoid strftime: linking its locale machinery costs static RAM on ESP8266.
-  char weekday[4], month[4];
+  char weekday[3], month[5];
   memcpy_P(weekday, weekdays[now.tm_wday], sizeof(weekday));
   memcpy_P(month, months[now.tm_mon], sizeof(month));
-  snprintf_P(buf, sizeof(buf), PSTR("%s %02d %s %d"), weekday, now.tm_mday, month, now.tm_year+1900);
-  gfxDrawCentered(buf, 60, 2, C_GRAY);
-  DashboardHijri hijri = dashboardHijri(day, s.hijriCorrection);
-  memcpy_P(name, hijriMonths[hijri.month-1], sizeof(name));
-  snprintf_P(buf, sizeof(buf), PSTR("%u %s %d AH~"), hijri.day, name, hijri.year);
-  gfxDrawCentered(buf, 84, 1, accent);
-  d->drawFastHLine(12, 100, 216, C_DGRAY);
+  snprintf_P(buf, sizeof(buf), PSTR("%s %02d. %s %d"), weekday, now.tm_mday, month, now.tm_year+1900);
+  centered(d, 120, 58, 2, C_GRAY, buf);
+  d->drawFastHLine(8, 80, 224, C_DGRAY);
+  centered(d, 60, 86, 1, C_GRAY, PSTR("Wetter"), true);
+  centered(d, 180, 86, 1, C_GRAY, PSTR("Mond"), true);
 
   const DashboardWeather& weather = dashboardWeather();
   if (s.weather && weather.valid) {
     int kind = weatherKind(weather.code);
     weatherIcon(d, kind);
-    snprintf_P(buf, sizeof(buf), PSTR("%.1f C"), weather.temperature);
-    text(d, 48, 109, 2, C_WHITE, buf);
-    flashText(d, 48, 133, 1, C_GRAY, weatherNames[kind]);
-    if (dashboardWeatherStale()) flashText(d, 178, 133, 1, accent, PSTR("stale"));
-    else if (weather.stage != WEATHER_OK) flashText(d, 178, 133, 1, C_GRAY, PSTR("retry"));
+    snprintf_P(buf, sizeof(buf), PSTR("%ld \xF8" "C"), lroundf(weather.temperature));
+    centered(d, 60, 130, 2, C_WHITE, buf);
+    centered(d, 60, 150, 1, C_GRAY, weatherNames[kind], true);
+    if (dashboardWeatherStale()) centered(d, 60, 162, 1, accent, PSTR("veralt."), true);
+    else if (weather.stage != WEATHER_OK) centered(d, 60, 162, 1, C_GRAY, PSTR("Neuversuch"), true);
   } else {
     weatherIcon(d, 7);
-    flashText(d, 48, 111, 2, C_WHITE, PSTR("--.- C"));
-    flashText(d, 48, 133, 1, C_GRAY, s.weather ? PSTR("Weather pending") : PSTR("Weather off"));
+    centered(d, 60, 130, 2, C_WHITE, PSTR("-- \xF8" "C"), true);
+    centered(d, 60, 150, 1, C_GRAY, s.weather ? PSTR("Wartezeit") : PSTR("Wetter aus"), true);
   }
   DashboardMoon moon = dashboardMoon(epoch);
   moonIcon(d, moon.cycle);
-  flashText(d, 48, 155, 2, C_WHITE, moonNames[moon.index]);
-  d->drawFastHLine(12, 182, 216, C_DGRAY);
+  for (int line = 0; line < 2; ++line) {
+    const char* phase = moonNames[moon.index][line];
+    if (strlen_P(phase)) centered(d, 180, 130+line*20, 2, C_WHITE, phase, true);
+  }
+  d->drawFastHLine(8, 172, 224, C_DGRAY);
+  centerFlash(d, 178, 1, C_GRAY, PSTR("N\x84" "chstes Gebet"));
 
   int64_t next;
   uint8_t adjusted;
@@ -166,21 +177,20 @@ void dashboardRender(const Settings& settings, const struct tm& now) {
   if (prayer >= 0) {
     memcpy_P(name, prayerNames[prayer], sizeof(prayerNames[0]));
     clockText(next, hhmm);
-    snprintf_P(buf, sizeof(buf), PSTR("Next %s %s"), name, hhmm);
-    gfxDrawCentered(buf, 189, 2, C_WHITE);
-    memcpy_P(name, methodNames[s.method], sizeof(methodNames[0]));
+    snprintf_P(buf, sizeof(buf), PSTR("%s %s"), name, hhmm);
+    centered(d, 120, 190, 2, C_WHITE, buf);
     if (s.countdown) {
       unsigned minutes = (unsigned)((next - epoch + 59) / 60);
-      snprintf_P(buf, sizeof(buf), PSTR("Calc %s%c | in %02uh %02um"), name, adjusted ? '*' : ' ',
+      snprintf_P(buf, sizeof(buf), PSTR("in %u Std. %u Min."),
                  minutes/60, minutes%60);
-    } else snprintf_P(buf, sizeof(buf), PSTR("Calculated %s%c"), name, adjusted ? '*' : ' ');
-    gfxDrawCentered(buf, 211, 1, accent);
+      centered(d, 120, 208, 2, accent, buf);
+    }
   } else {
-    centerFlash(d, 189, 2, C_WHITE, PSTR("No prayer crossing"));
-    centerFlash(d, 211, 1, accent, PSTR("Check latitude / convention"));
+    centerFlash(d, 190, 2, C_WHITE, PSTR("Keine Gebetszeit"));
+    centerFlash(d, 212, 1, accent, PSTR("Ort / Methode pr\x81" "fen"));
   }
   char rise[6], set[6];
   sunText(day, g_days[1].sunrise, rise); sunText(day, g_days[1].sunset, set);
-  snprintf_P(buf, sizeof(buf), PSTR("Rise %s   Set %s"), rise, set);
-  gfxDrawCentered(buf, 230, 1, C_GRAY);
+  snprintf_P(buf, sizeof(buf), PSTR("Aufg. %s  Unterg. %s"), rise, set);
+  centered(d, 120, 228, 1, C_GRAY, buf);
 }
