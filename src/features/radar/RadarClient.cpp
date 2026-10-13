@@ -1,5 +1,7 @@
 #include "RadarClient.h"
 #include "Platform.h"
+#include "RadarFeed.h"
+#include <new>
 #include <ArduinoJson.h>
 #include <math.h>
 
@@ -81,29 +83,9 @@ void radarInit(const Settings& s) {
 }
 
 void radarForceRefresh() { g_nextPollMs = millis(); }
-
-// ---- geo: flat-earth projection around home (good enough at radar ranges) --
-static void geo(float homeLat, float homeLon, float lat, float lon,
-                float& distKm, float& brg) {
-  float dLat = (lat - homeLat) * 111.0f;                              // km north
-  float dLon = (lon - homeLon) * 111.0f * cosf(homeLat * (float)PI / 180.0f); // km east
-  distKm = sqrtf(dLat * dLat + dLon * dLon);
-  brg = atan2f(dLon, dLat) * 180.0f / (float)PI;                      // 0 = N, 90 = E
-  if (brg < 0) brg += 360.0f;
-}
-
-// Keep the array sorted ascending by distance, holding at most MAX_AIRCRAFT.
-static void insertNearest(const Aircraft& t) {
-  if (g_count == MAX_AIRCRAFT && t.distKm >= g_ac[g_count - 1].distKm) return;
-  uint8_t i = (g_count < MAX_AIRCRAFT) ? g_count : (uint8_t)(MAX_AIRCRAFT - 1);
-  while (i > 0 && g_ac[i - 1].distKm > t.distKm) { g_ac[i] = g_ac[i - 1]; i--; }
-  g_ac[i] = t;
-  if (g_count < MAX_AIRCRAFT) g_count++;
-}
-
-static void trimTail(char* s) {
-  int n = strlen(s);
-  while (n > 0 && (s[n - 1] == ' ' || s[n - 1] == '\t')) s[--n] = 0;
+uint32_t radarPollInMs() {
+  int32_t remaining = (int32_t)(g_nextPollMs - millis());
+  return remaining > 0 ? (uint32_t)remaining : 0;
 }
 
 // ---- which open-data feed the "direct" sources point at --------------------
@@ -159,59 +141,42 @@ static String buildWebhookUrl(const Settings& s) {
   return u;
 }
 
-// ---- parse the open-data / webhook "ac" array ------------------------------
-static bool parseAdsb(const Settings& s, Stream& stream) {
-  // Filter to just the fields we plot; applied to every element of "ac".
-  JsonDocument filter;
-  JsonObject fe = filter["ac"][0].to<JsonObject>();
-  fe["lat"] = true;
-  fe["lon"] = true;
-  fe["track"] = true;
-  fe["gs"] = true;
-  fe["flight"] = true;
-  fe["hex"] = true;
-  fe["alt_baro"] = true;
-
-  JsonDocument doc;
-  DeserializationError err =
-      deserializeJson(doc, stream, DeserializationOption::Filter(filter));
-  g_memory.json = sampleHeap();   // both JSON documents still alive
-  if (err) { g_stage = RADAR_PARSE_FAIL; return false; }
-
-  JsonArrayConst ac = doc["ac"].as<JsonArrayConst>();
-  if (ac.isNull()) { g_stage = RADAR_NO_AC; return false; }
-
-  g_seenAc = 0;
-  for (JsonObjectConst a : ac) { (void)a; g_seenAc++; }
-
-  g_count = 0;
-  for (JsonObjectConst a : ac) {
-    if (!a["lat"].is<float>() && !a["lat"].is<int>()) continue;
-    if (!a["lon"].is<float>() && !a["lon"].is<int>()) continue;
-
-    Aircraft t;
-    t.track = (a["track"].is<float>() || a["track"].is<int>()) ? a["track"].as<float>() : NAN;
-    t.gs    = (a["gs"].is<float>()    || a["gs"].is<int>())    ? a["gs"].as<float>()    : NAN;
-    t.altFt = a["alt_baro"].is<int>() ? a["alt_baro"].as<int>() : 0;  // "ground" => 0
-
-    // Optional: drop ground/low traffic below the configured altitude threshold.
-    if (s.radar.minAltFt > 0 && t.altFt < (int32_t)s.radar.minAltFt) continue;
-
-    const char* fl = a["flight"] | (a["hex"] | "");
-    strlcpy(t.callsign, fl, sizeof(t.callsign));
-    trimTail(t.callsign);
-
-    geo(s.radar.lat, s.radar.lon, a["lat"].as<float>(), a["lon"].as<float>(),
-        t.distKm, t.bearingDeg);
-    insertNearest(t);
+// Stream reads wait for an individual byte; yield regularly even on a full
+// socket so dense feeds cannot starve the watchdog.
+class RadarStreamInput {
+ public:
+  explicit RadarStreamInput(Stream& stream) : stream_(stream) {}
+  int read() {
+    char c;
+    if (!stream_.readBytes(&c, 1)) return -1;
+    if ((++bytes_ & 255) == 0) yield();
+    return (uint8_t)c;
   }
+ private:
+  Stream& stream_;
+  uint16_t bytes_ = 0;
+};
 
+static bool parseAdsb(const Settings& s, Stream& stream) {
+  // Heap scratch (768 B on Lean), not another permanent cache or stack frame.
+  std::unique_ptr<Aircraft[]> pending(new (std::nothrow) Aircraft[MAX_AIRCRAFT]);
+  if (!pending) { g_stage = RADAR_PARSE_FAIL; return false; }
+  RadarStreamInput input(stream);
+  RadarFeedResult result;
+  RadarFeedSettings home = {s.radar.lat, s.radar.lon, s.radar.minAltFt};
+  g_memory.json = 0;
+  bool ok = radarParseFeed(input, home, pending.get(), MAX_AIRCRAFT, result, []() {
+    uint32_t heap = sampleHeap();
+    if (!g_memory.json || heap < g_memory.json) g_memory.json = heap;
+  });
+  if (!ok) { g_stage = RADAR_PARSE_FAIL; return false; }
+  if (!result.found) { g_stage = RADAR_NO_AC; return false; }
+  memcpy(g_ac, pending.get(), result.count * sizeof(Aircraft));
+  g_count = result.count;
+  g_seenAc = result.seen;
   g_lastOkMs = millis();
   g_error = false;
-  // A response that parsed but plotted nothing is a filter result, not a
-  // network fault; g_seenAc says whether the feed had traffic to begin with.
-  g_stage = (g_count > 0) ? RADAR_OK
-          : (g_seenAc > 0) ? RADAR_FILTERED_ALL : RADAR_NO_AC;
+  g_stage = g_count ? RADAR_OK : (g_seenAc ? RADAR_FILTERED_ALL : RADAR_NO_AC);
   return true;
 }
 

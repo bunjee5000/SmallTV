@@ -3,6 +3,8 @@
 #include <math.h>
 #include "Gfx.h"
 #include "RadarClient.h"
+#include "RadarRoutes.h"
+#include "RadarLabels.h"
 
 RadarMode g_radarMode;
 
@@ -52,15 +54,6 @@ static void planeTri(Arduino_GFX* gfx, int x, int y, float trackDeg, float k, ui
   gfx->fillTriangle(nx, ny, lx, ly, rx, ry, color);
 }
 
-// Label bounding box + AABB overlap test, used to declutter callsigns: labels
-// are placed nearest-first and any that would collide with one already drawn are
-// dropped (the plane's triangle still shows).
-struct LblBox { int16_t x, y, w, h; };
-static bool boxHit(const LblBox& a, const LblBox& b) {
-  return !(a.x + a.w <= b.x || b.x + b.w <= a.x ||
-           a.y + a.h <= b.y || b.y + b.h <= a.y);
-}
-
 // ---- the radar view --------------------------------------------------------
 static void drawRadar(const Settings& s) {
   Arduino_GFX* gfx = gfxDev();
@@ -79,6 +72,12 @@ static void drawRadar(const Settings& s) {
   gfx->drawFastHLine(CX - RR, CY, 2 * RR, C_DGRAY);
   gfxDrawCentered("N", CY - RR + 2, txt, C_GRAY);   // just inside the top of the ring
 
+  // Reserve existing overlays/airport labels as well as flight labels.
+  RadarLabelBox labels[MAX_AIRCRAFT+MAX_AIRPORTS+2];
+  uint8_t nLabels=0;
+  labels[nLabels++]={0,0,TFT_WIDTH,(int16_t)(txt==1 ? 20 : 28)};
+  labels[nLabels++]={(int16_t)(CX-5),(int16_t)(CY-5),10,10};
+
   // Home-area airports (projected like aircraft).
   int ad = scaleR(5, k);
   for (uint8_t i = 0; i < s.radar.airportCount; i++) {
@@ -95,15 +94,22 @@ static void drawRadar(const Settings& s) {
     if (s.radar.airports[i].icao[0]) {
       gfx->setTextSize(txt);
       gfx->setTextColor(C_BLUE);
-      gfx->setCursor(x + ad + 3, y - ad - 1);
+      int width=strlen(s.radar.airports[i].icao)*6*txt;
+      int lx=x+ad+3, ly=y-ad-1;
+      if(lx+width>238) lx=238-width;
+      if(lx<2) lx=2;
+      if(ly<2) ly=2;
+      if(ly+8*txt>238) ly=238-8*txt;
+      gfx->setCursor(lx,ly);
       gfx->print(s.radar.airports[i].icao);
+      labels[nLabels++]={(int16_t)lx,(int16_t)ly,(int16_t)width,(int16_t)(8*txt)};
     }
   }
 
   // Aircraft, nearest first.
   uint8_t n = radarCount();
-  LblBox  lbl[MAX_AIRCRAFT];    // labels already placed (for declutter)
-  uint8_t nLbl = 0;
+  uint8_t labelAircraft[MAX_AIRCRAFT];
+  uint8_t firstFlight=nLabels, nFlight=0;
   for (uint8_t i = 0; i < n; i++) {
     const Aircraft& a = aircraftAt(i);
 
@@ -129,33 +135,59 @@ static void drawRadar(const Settings& s) {
     if (!isnan(a.track)) planeTri(gfx, x, y, a.track, k, C_RED);
     else                 gfx->fillCircle(x, y, scaleR(4, k), C_RED);
 
-    if (s.radar.showLabels && a.callsign[0]) {
-      int lw = (int)strlen(a.callsign) * 6 * txt;
-      int lh = 8 * txt + (a.altFt > 0 ? 8 : 0);
-      // Right of the marker by default; flip to its left when the label would
-      // run off the panel, and clamp as a last resort so it never clips.
-      int lx = x + lblDX;
-      if (lx + lw > TFT_WIDTH - 2) lx = x - lblDX - lw;
-      if (lx < 2) lx = 2;
-      if (lx + lw > TFT_WIDTH - 2) lx = TFT_WIDTH - 2 - lw;
-      LblBox box = {(int16_t)lx, (int16_t)(y - (txt == 1 ? 4 : 8)),
-                    (int16_t)lw, (int16_t)lh};
-      bool clash = false;
-      for (uint8_t j = 0; j < nLbl; j++) if (boxHit(box, lbl[j])) { clash = true; break; }
-      if (!clash) {                          // skip labels that would collide
-        if (nLbl < MAX_AIRCRAFT) lbl[nLbl++] = box;
-        gfx->setTextSize(txt);
-        gfx->setTextColor(C_GRAY);
-        gfx->setCursor(box.x, box.y);
-        gfx->print(a.callsign);
-        if (a.altFt > 0) {
-          char fl[11];
-          snprintf(fl, sizeof(fl), "FL%03d", (int)(a.altFt / 100));
-          gfx->setTextSize(1);
-          gfx->setCursor(box.x, y + (txt == 1 ? 6 : 10));
-          gfx->print(fl);
-        }
+  }
+
+  // Reserve ALL flight numbers first, so supplementary text cannot steal space
+  // from another flight. Aircraft capacity, markers and vectors are unchanged.
+  if (s.radar.showLabels) for(uint8_t i=0;i<n;++i) {
+    const Aircraft& a=aircraftAt(i);
+    if (a.distKm>range || !a.callsign[0]) continue;
+    int x,y; polar(a.distKm/range*RR,a.bearingDeg,x,y);
+    const RadarRouteInfo* route=s.radar.showRoutes ? radarRouteFor(a.callsign) : nullptr;
+    char flight[10]; radarFlightLabel(a.callsign,route,flight);
+    RadarLabelBox box;
+    if(radarPlaceLabel(x,y,lblDX,strlen(flight)*6*txt,8*txt,labels,nLabels,-1,box)) {
+      labelAircraft[nFlight++]=i;
+      labels[nLabels++]=box;
+    }
+  }
+  for(uint8_t i=0;i<nFlight;++i) {
+    const Aircraft& a=aircraftAt(labelAircraft[i]);
+    const RadarRouteInfo* route=s.radar.showRoutes ? radarRouteFor(a.callsign) : nullptr;
+    char flight[10], airports[10], altitude[11];
+    radarFlightLabel(a.callsign,route,flight);
+    airports[0]=altitude[0]=0;
+    if(route) snprintf_P(airports,sizeof(airports),PSTR("%s-%s"),route->origin,route->destination);
+    if(a.altFt>0) snprintf_P(altitude,sizeof(altitude),PSTR("FL%03ld"),(long)(a.altFt/100));
+    int x,y; polar(a.distKm/range*RR,a.bearingDeg,x,y);
+    uint8_t slot=firstFlight+i;
+    bool showRoute=false,showAlt=false;
+    // Prefer the route, then altitude; each candidate includes every text line.
+    for(int attempt=0;attempt<3;++attempt) {
+      bool r=airports[0] && attempt<2;
+      bool f=altitude[0] && attempt!=1;
+      if(!r && !f) continue;
+      int width=strlen(flight)*6*txt;
+      int rw=r ? strlen(airports)*6 : 0, fw=f ? strlen(altitude)*6 : 0;
+      if(rw>width) width=rw;
+      if(fw>width) width=fw;
+      int height=8*txt+(r ? 10 : 0)+(f ? 10 : 0);
+      RadarLabelBox box;
+      if(radarPlaceLabel(x,y,lblDX,width,height,labels,nLabels,slot,box)) {
+        labels[slot]=box; showRoute=r; showAlt=f; break;
       }
+    }
+    const RadarLabelBox& box=labels[slot];
+    gfx->setTextSize(txt); gfx->setTextColor(C_GRAY);
+    gfx->setCursor(box.x,box.y); gfx->print(flight);
+    int lineY=box.y+8*txt+2;
+    if(showRoute) {
+      gfx->setTextSize(1); gfx->setTextColor(C_BLUE);
+      gfx->setCursor(box.x,lineY); gfx->print(airports); lineY+=10;
+    }
+    if(showAlt) {
+      gfx->setTextSize(1); gfx->setTextColor(C_GRAY);
+      gfx->setCursor(box.x,lineY); gfx->print(altitude);
     }
   }
 
@@ -219,4 +251,6 @@ void RadarMode::service(const Settings& s) {
     render(s);
     needRender_ = false;
   }
+  // Run enrichment after rendering, with the aircraft socket already closed.
+  if (radarRoutesService(s)) needRender_ = true;
 }

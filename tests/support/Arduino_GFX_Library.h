@@ -11,18 +11,30 @@ class Arduino_GFX {
   unsigned textRows = 0;
   int x = 0, y = 0, size = 1;
   uint16_t color = 0xffff;
+  bool clipGeometry = false;
+  std::vector<std::string> strings;
   void setTextSize(int s) { size=s; }
   void setTextColor(uint16_t c) { color=c; }
   void setCursor(int a,int b) { x=a; y=b; }
   void setTextWrap(bool) {}
   void drawPixel(int a,int b,uint16_t c) {
+    if(clipGeometry && (a<0 || a>=240 || b<0 || b>=240)) return;
     assert(a>=0 && a<240 && b>=0 && b<240);
     pixels[b*240+a]=c;
   }
   void fillRect(int a,int b,int w,int h,uint16_t c) {
     for(int j=0;j<h;j++) for(int i=0;i<w;i++) drawPixel(a+i,b+j,c);
   }
-  void fillScreen(uint16_t c) { std::fill(pixels.begin(),pixels.end(),c); textRows=0; }
+  void fillScreen(uint16_t c) { std::fill(pixels.begin(),pixels.end(),c); textRows=0; strings.clear(); }
+  void fillTriangle(int ax,int ay,int bx,int by,int cx,int cy,uint16_t c) {
+    auto cross=[](int x1,int y1,int x2,int y2,int px,int py) { return (px-x1)*(y2-y1)-(py-y1)*(x2-x1); };
+    int minX=std::min(ax,std::min(bx,cx)),maxX=std::max(ax,std::max(bx,cx));
+    int minY=std::min(ay,std::min(by,cy)),maxY=std::max(ay,std::max(by,cy));
+    for(int j=minY;j<=maxY;++j) for(int i=minX;i<=maxX;++i) {
+      int a=cross(ax,ay,bx,by,i,j),b=cross(bx,by,cx,cy,i,j),d=cross(cx,cy,ax,ay,i,j);
+      if((a>=0 && b>=0 && d>=0)||(a<=0 && b<=0 && d<=0)) drawPixel(i,j,c);
+    }
+  }
   void drawFastHLine(int a,int b,int w,uint16_t c) { fillRect(a,b,w,1,c); }
   void drawFastVLine(int a,int b,int h,uint16_t c) { fillRect(a,b,1,h,c); }
   void drawLine(int a,int b,int endX,int endY,uint16_t c) {
@@ -44,6 +56,7 @@ class Arduino_GFX {
   void print(const char* value) {
     assert(x>=0 && x+(int)strlen(value)*6*size<=240 && y>=0 && y+8*size<=240);
     ++textRows;
+    strings.emplace_back(value);
     for(;*value;value++) { unsigned ch=(unsigned char)*value; assert(ch>=32 && ch<127);
       for(int i=0;i<5;i++) for(int j=0;j<8;j++) if(font[ch*5+i]&(1<<j)) fillRect(x+i*size,y+j*size,size,size,color);
       x+=6*size;

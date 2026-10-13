@@ -39,6 +39,13 @@ async function load(config) {
     fajrAngle: 18, ishaAngle: 17 });
   assert.strictEqual(result.carouselClock, true);
   assert.strictEqual(result.carouselRadar, true);
+  assert.strictEqual(result.radar.showRoutes, true);
+  result = await load({ ...baseline, radar: { showRoutes: false } });
+  assert.strictEqual(result.radar.showRoutes, false);
+  assert.strictEqual(context.radarRoutesLine({ enabled: false }), 'off');
+  assert.strictEqual(context.radarRoutesLine({ enabled: true, stage: 3 }), 'low heap');
+  assert.strictEqual(context.radarRoutesLine({ enabled: true, stage: 2, http: 404, attempts: 1 }),
+    'unknown flight, HTTP 404, 1 lookups');
   assert.strictEqual(result.clock.tzPosix, 'CET-1CEST,M3.5.0,M10.5.0/3');
   const custom = { enabled: false, weather: false, countdown: false,
     lat: 0, lon: 0, method: 4, asr: 1, highLatitude: 3, hijriCorrection: -1,

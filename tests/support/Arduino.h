@@ -17,6 +17,7 @@ using String = std::string;
 #define snprintf_P snprintf
 #define PI 3.14159265358979323846
 inline void yield() {}
+template<class T> inline T constrain(T value, T low, T high) { return value<low ? low : value>high ? high : value; }
 // Fixed 12 October 2026 16:37 CEST for a reproducible visual fixture.
 extern time_t dashboardTestEpoch;
 inline time_t dashboardTestTime(time_t*) { return dashboardTestEpoch; }

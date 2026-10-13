@@ -379,6 +379,7 @@ void RadarSettings::setDefaults() {
   showLabels = true;
   showVectors = true;
   showRimDots = true;
+  showRoutes = true;
   uiScale = 1;            // medium
   minAltFt = 0;           // show all
   airportCount = 0;
@@ -400,6 +401,7 @@ void RadarSettings::toJson(JsonObject o) const {
   o["showLabels"]  = showLabels;
   o["showVectors"] = showVectors;
   o["showRimDots"] = showRimDots;
+  o[F("showRoutes")] = showRoutes;
   o["uiScale"]     = uiScale;
   o["minAltFt"]    = minAltFt;
 
@@ -432,6 +434,7 @@ void RadarSettings::fromJson(JsonObjectConst o) {
   if (o["showLabels"].is<bool>())  showLabels = o["showLabels"];
   if (o["showVectors"].is<bool>()) showVectors = o["showVectors"];
   if (o["showRimDots"].is<bool>()) showRimDots = o["showRimDots"];
+  if (o[F("showRoutes")].is<bool>()) showRoutes = o[F("showRoutes")];
   if (o["uiScale"].is<int>())      uiScale = constrain((int)o["uiScale"], 0, 2);
   if (o["minAltFt"].is<int>())     minAltFt = constrain((int)o["minAltFt"], 0, 60000);
 

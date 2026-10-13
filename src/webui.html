@@ -325,6 +325,8 @@ small.hint{display:block;color:var(--mut);margin-top:4px;font-size:12px}
    <input id="radarMinAlt" type="number" min="0" max="60000" step="100">
    <small class="hint">Drops ground traffic (parked/taxiing) and low flights. Try <code>500</code> to hide anything on or near the ground.</small>
    <div class="chk" style="margin-top:12px"><input id="showLabels" type="checkbox"><label>Callsign &amp; altitude labels</label></div>
+   <div class="chk"><input id="showRoutes" type="checkbox"><label>Flight numbers &amp; departure/destination airports</label></div>
+   <small class="hint">Example: TK 1554 / HAJ-IST. Cached route data from <a href="https://www.adsbdb.com/" target="_blank" rel="noopener">adsbdb</a>; at most four lookups per minute while Radar is active, with memory guards. Routes are database estimates, not live flight plans. Unknown flights retain their callsign. Route and altitude lines appear when space permits. Lookups can briefly pause the display on slow connections; disable here if needed.</small>
    <div class="chk"><input id="showVectors" type="checkbox"><label>Speed / heading vectors</label></div>
    <div class="chk"><input id="showRimDots" type="checkbox"><label>Off-screen traffic dots on the rim</label></div>
   </div>
@@ -546,6 +548,7 @@ function loadConfig(){return j('/api/config').then(function(c){C=c;
  sv('radarSource',r.source||'adsblol'); radarSrcChanged();
  sv('radarWebhookUrl',r.webhookUrl);
  sc('showLabels',r.showLabels); sc('showVectors',r.showVectors); sc('showRimDots',r.showRimDots);
+ sc('showRoutes',r.showRoutes!==false);
  sv('radarUiScale',r.uiScale!=null?r.uiScale:1);
  sv('radarMinAlt',r.minAltFt!=null?r.minAltFt:0);
  renderAps(r.airports||[]);
@@ -669,6 +672,7 @@ function collect(){
    pollSec:parseInt(gv('radarPollSec'))||0, source:gv('radarSource'),
    webhookUrl:gv('radarWebhookUrl'),
    showLabels:gc('showLabels'), showVectors:gc('showVectors'), showRimDots:gc('showRimDots'),
+   showRoutes:gc('showRoutes'),
    uiScale:parseInt(gv('radarUiScale'))||0, minAltFt:parseInt(gv('radarMinAlt'))||0};
   r.airports=[];
   document.querySelectorAll('#apTable tr').forEach(function(tr){
@@ -759,7 +763,8 @@ function loadStatus(){j('/api/status').then(function(s){
   (s.dashboard?kv('Dashboard weather',!s.dashboard.enabled?'dashboard off':!s.dashboard.weatherEnabled?'off':
    (s.dashboard.weatherValid?s.dashboard.temperature.toFixed(1)+' C'+(s.dashboard.stale?' (stale)':''):'pending')+
    (s.dashboard.stage>1?' - '+(['','','low heap','connection error','HTTP error','invalid response'][s.dashboard.stage]||'retrying'):'')):'')+
-  (s.radar?kv('Radar',radarLine(s.radar)):'');
+  (s.radar?kv('Radar',radarLine(s.radar)):'')+
+  (s.radar&&s.radar.routes?kv('Radar routes',radarRoutesLine(s.radar.routes)):'');
  var wgs=$('wgStatus'); if(wgs)wgs.textContent=wgLine(s.wg);
  var tb=$('tickBox');
  if(tb){var h='';(s.tickers||[]).forEach(function(t){
@@ -789,6 +794,16 @@ function radarLine(r){
  if(r.triedAgo!=null)t+=', tried '+r.triedAgo+'s ago';
  if(r.okAgo!=null)t+=', last ok '+r.okAgo+'s ago';
  else if(r.stage!=='idle')t+=', never succeeded';
+ return t;
+}
+
+function radarRoutesLine(r){
+ if(!r||!r.enabled)return 'off';
+ var t=['waiting','route found','unknown flight','low heap','lookup failed'][r.stage]||'waiting';
+ if(r.http)t+=', HTTP '+r.http;
+ if(r.attempts)t+=', '+r.attempts+' lookups';
+ if(r.heapClosed)t+=', heap '+r.heapClosed+' B';
+ if(r.blockClosed)t+=', largest block '+r.blockClosed+' B';
  return t;
 }
 

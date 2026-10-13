@@ -179,6 +179,7 @@ struct RadarSettings {
   bool     showLabels;    // callsign + altitude next to each aircraft
   bool     showVectors;   // speed/heading vector line
   bool     showRimDots;   // aircraft beyond the ring as bearing dots on the rim
+  bool     showRoutes;    // optional cached flight number and origin/destination
   uint8_t  uiScale;       // marker/text size: 0 = small, 1 = medium, 2 = large
   uint16_t minAltFt;      // hide aircraft below this altitude (ft); 0 = show all
 

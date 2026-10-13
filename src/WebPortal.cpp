@@ -15,6 +15,9 @@
 #include "NotifyMode.h"
 #endif
 #include "Clock.h"
+#if WITH_RADAR
+#include "RadarRoutes.h"
+#endif
 #include "DashboardWeather.h"
 #include "WgClient.h"
 #if WITH_THEME
@@ -195,6 +198,15 @@ static void handleStatus() {
     mem[F("closed")] = m.closed;
     mem[F("closedBlock")] = m.closedBlock;
     mem[F("minSampled")] = m.minSampled;
+    const RadarRouteStatus& routes = radarRouteStatus();
+    JsonObject route = r[F("routes")].to<JsonObject>();
+    route[F("enabled")] = S->radar.showRoutes;
+    route[F("stage")] = routes.stage;
+    route[F("http")] = routes.http;
+    route[F("attempts")] = routes.attempts;
+    route[F("minSampled")] = routes.minSampled;
+    route[F("heapClosed")] = routes.heapClosed;
+    route[F("blockClosed")] = routes.blockClosed;
   }
 #endif
 

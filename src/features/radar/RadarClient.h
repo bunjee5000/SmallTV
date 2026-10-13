@@ -7,6 +7,7 @@
 void radarInit(const Settings& s);       // reset + poll ASAP
 void radarService(const Settings& s);    // call often; self-times the polling
 void radarForceRefresh();                // poll on the next service() call
+uint32_t radarPollInMs();                 // zero when an aircraft update is due
 
 uint8_t         radarCount();            // aircraft currently held (nearest first)
 const Aircraft& aircraftAt(uint8_t i);
